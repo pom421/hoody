@@ -1,6 +1,6 @@
 {
   "name": "hoody",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "",
   "main": "index.js",
   "scripts": {
@@ -18,7 +18,8 @@
   "homepage": "https://github.com/pom421/hoody#readme",
   "dependencies": {
     "fs-extra": "^4.0.2",
-    "inquirer": "^3.3.0"
+    "inquirer": "^3.3.0",
+    "ssh-deploy-release": "^2.1.2"
   },
   "devDependencies": {
     "express": "^4.16.2"

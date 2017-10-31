@@ -12,18 +12,17 @@
 *----------------------------------------------------------------------------------------*/
 
 const express = require("express")
+const app = express()
 const fs = require("fs-extra")
 const inquirer = require("inquirer")
+const Deployer = require('ssh-deploy-release');
 
-const app = express()
-const argv = process.argv.slice(2)
-
-const LOCAL_USER_PATH = process.env.PWD
 const PREF_FILE = process.env.PWD + "/config.json"
 const MSG_ERR = "Appel incorrect de Hoody"
 
 const EXIT_BAD_SYNTAX = 1
 const EXIT_WWW_NOT_FOUND = 2
+const EXIT_BAD_PORT = 3
 
 // objet par défaut pour ssh-deployer
 const SSH_DEPLOYER_DEFAULT = {
@@ -32,11 +31,13 @@ const SSH_DEPLOYER_DEFAULT = {
   exclude: [".svn/**", ".git/**"]
 }
 
-
 // Lancement du traitement principal
 main()
 
+// CLI
 function main() {
+  const argv = process.argv.slice(2)
+
   if (!argv[0]) {
     console.log(MSG_ERR)
     help()
@@ -48,10 +49,16 @@ function main() {
       init()
       break
     case "RUN":
-      run()
+      run(argv)
       break
     case "DEPLOY":
       deploy()
+      break
+    case "REMOVE":
+      remove()
+      break
+    case "HELP":
+      help()
       break
     default:
       console.log(MSG_ERR)
@@ -60,14 +67,17 @@ function main() {
   }
 }
 
+// Aide à la syntaxe du CLI
 function help() {
-  console.log("Hoody version 1.0.0")
+  const packageInfos = require("./package.json")
+  console.log(`Hoody version ${ packageInfos.version }`)
   console.log("Syntaxe :")
   console.log("hoody init")
-  console.log("hoody run")
+  console.log("hoody run (ou hoddy run 8081)")
   console.log("hoody deploy")
 }
 
+// Initialisation du projet Hoody
 function init() {
   console.log("dans init")
   fs.stat(PREF_FILE)
@@ -89,6 +99,7 @@ function init() {
     })
 }
 
+// Questionne l'utilisateur afin de constituer le fichier de configuration
 function askPreferences() {
   console.log("\n")
 
@@ -166,6 +177,7 @@ function askPreferences() {
 }
 
 function copyTemplate() {
+  const LOCAL_USER_PATH = process.env.PWD
 
   fs.stat(LOCAL_USER_PATH + "/www")
     .then(() => {
@@ -187,25 +199,61 @@ function copyTemplate() {
     })
 }
 
-function run() {
+// Lancement d'un serveur web
+function run(argv) {
+  const port = argv[1] ? +argv[1] : 8080
 
   fs.stat(process.env.PWD + "/www/")
     .then(() => {
       app.use(express.static(process.env.PWD + "/www"))
 
-      app.listen(8080, () => {
-        console.log("serveur lancé sur http://localhost:8080")
+      app.listen(port, () => {
+        console.log(`Serveur lancé sur http://localhost:${ port }`)
       })
     })
     .catch(err => {
-      console.error("Le répertoire www n'existe pas dans le répetoire courant. \n Veuillez lancer hoody init auparavant")
-      process.exit(EXIT_WWW_NOT_FOUND)
+      if (err instanceof RangeError) {
+        console.error("Erreur: le port doit être compris entre 0 et 65536")
+        process.exit(EXIT_BAD_PORT)
+      } else {
+        console.error("Erreur: le répertoire www n'existe pas dans le répetoire courant. \n Veuillez lancer hoody init auparavant")
+        process.exit(EXIT_WWW_NOT_FOUND)
+      }
     })
 
-
 }
 
+// Déploiement d'une release par SSH
 function deploy() {
   console.log("dans deploy")
+
+  const options = require(PREF_FILE)
+
+  const deployer = new Deployer(options);
+  deployer.deployRelease(() => {
+    console.log('Déploiement de la release effectué')
+  });
 }
 
+// Suppression du répertoire www et du fichier de configuration hoody
+function remove() {
+  const LOCAL_USER_PATH = process.env.PWD
+
+  fs.stat(LOCAL_USER_PATH + "/www")
+    .then(stats => {
+      console.log("Suppression du répertoire www")
+      fs.removeSync(LOCAL_USER_PATH + "/www")
+    })
+    .catch(err => {
+      console.error("Répertoire www inexistant, rien à supprimer")
+    })
+
+  fs.stat(PREF_FILE)
+    .then(stats => {
+      console.log("Suppression du fichier config.json")
+      fs.removeSync(PREF_FILE)
+    })
+    .catch(err => {
+      console.error("Fichier config.json inexistant, rien à supprimer")
+    })
+}
